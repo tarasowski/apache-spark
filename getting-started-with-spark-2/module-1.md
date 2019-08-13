@@ -162,7 +162,8 @@ complex_data = spark.sparkContext.parallelize([Row(
     col_list=[1,2,3,4],
     col_dict={'k1': 0},
     col_row=Row(a=40, b=50),
-    col_time=datetime(2014,8,2,14,1,6)
+    col_time=datetime(2014,8,2,14,1,6),
+    col_boolean=True
 )])
 complex_data.count()
 cdf = complex_data.toDF()
@@ -174,6 +175,77 @@ students = records.map(lambda r: column_names(*r))
 # the map() operation performs a transformation on every element in the RDD
 # the map() operation is not supported on dataframes because if you perform a computation
 # on every record on a dataframe will typically store the result in a new column in the resulting dataframe
-students.collect()
+print(students.collect())
 students.toDF().show()
+
+cell_float = cdf.collect()[0][1] # this is called a matrix notation 
+#1.44
+cell_list = cdf.collect()[0][4]
+print('cell_list value follows after')
+print(cell_list)
+cell_list.append(100)
+cell_list
+
+# Extract specific columns by converting to an RDD
+extr = cdf.rdd.map(lambda x: (x.col_string, x.col_integer))
+# [('John', 10)]
+extr_ = extr.map(lambda r: Row(str_=r[0], score=r[1]))
+# converted from [Row()] RDD to a dataframe
+extr_.toDF().show()
+
+
+# A better way to extract specific dictionary df is to use
+# only available on DataFrames
+cdf.select('col_string', 'col_integer').show()
+
+# map() DataFrames do not suppor the map operation
+# If you want to calculate some value on every record on a dataframe use withColumn
+cdf.rdd.map(lambda x: (x.col_string + " Boo")).collect()
+# ['John Boo']
+
+# in this example we create a new data frame that contains col_integer and col_float
+# we use the .withColumn method to add a new column with computed values
+cdf.select('col_integer', 'col_float')\
+    .withColumn(
+        'col_sum',
+         cdf.col_integer + cdf.col_float
+        ).show()
+
+# calculates a new column col_opposite
+cdf.select('col_boolean')\
+    .withColumn(
+        'col_opposite',
+        cdf.col_boolean == False
+    ).show()
+
+# renaming of the column
+# all of the operations don't affect the original dataframe a new dataframe gets created
+cdf.withColumnRenamed('col_dict', 'col_map').show()
+
+# select a specific column and rename it
+# new dataframe gets created with a single column and aliased as the name column
+cdf.select(cdf.col_string.alias('Name')).show()
+
+# spark data frames can be converted to pandas data frames
+# df_pands = cdf.toPandas()
+# spark data frames are build on top of RDD's and distributed across nodes cluster
+# pandas data frames will be in memory on a single machine 
+# creates a spark data frame from pandas data frame
+# the result will be spark RDD
+# df_spark = sqlContext.createDataFrame(df_pandas).show()
 ```
+
+## Difference between Spark 2 vs. Spark 1
+* Spark 2
+  * Univies datasets and dataframes and makes sql support native
+  * Optimize like a compiler, not a DBMS
+  * Use of use: unified API for DataFrames for Batch and Streaming data
+  * spark.ml and ML pipelines
+  * Advanced streaming (windows, watermarking)
+  * DataFrame & Dataset are now DataFrame
+    * Untyped API
+    * Typed API (Dataset)
+  * Structured Streaming in Spark 2 and Streaming in Spark 1
+
+**Important:** The bottleneck now in computing is CPU and not disk (SSD) or
+network connection
