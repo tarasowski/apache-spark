@@ -443,3 +443,87 @@ pa_2016.select('player_api_id', 'overall_rating')\
 
 # the output are 6 json files, since we had 6 partitions, means 1 file for each partition
 ``` 
+
+## Joins
+
+```py
+from pyspark.sql import SparkSession
+spark = SparkSession.builder\
+                    .appName('Analyzing soccer players')\
+                    .getOrCreate()
+
+
+valuesA = [('John', 100000), ('James', 150000), ('Emily', 65000), ('Nina', 200000)]
+tableA = spark.createDataFrame(valuesA, ['name', 'salary'])
+
++-----+------+
+| name|salary|
++-----+------+
+| John|100000|
+|James|150000|
+|Emily| 65000|
+| Nina|200000|
++-----+------+
+
+valuesB = [('James', 2), ('Emily', 3), ('Darth Vader', 5), ('Princess Leia', 5)]
+tableB = spark.createDataFrame(valuesB,['name', 'employee_id'])
+
++-------------+-----------+
+|         name|employee_id|
++-------------+-----------+
+|        James|          2|
+|        Emily|          3|
+|  Darth Vader|          5|
+|Princess Leia|          5|
++-------------+-----------+
+
+inner_join = tableA.join(tableB, tableA['name'] == tableB['name'])
+# if you don't specify the join operation spark assumes it's an inner join
+inner_join.show()
+# contains only James, Emily
+
++-----+------+-----+-----------+
+| name|salary| name|employee_id|
++-----+------+-----+-----------+
+|James|150000|James|          2|
+|Emily| 65000|Emily|          3|
++-----+------+-----+-----------+
+
+left_join = tableA.join(tableB, tableA['name'] == tableB['name'], how='left')
+left_join.show()
+
++-----+------+-----+-----------+
+| name|salary| name|employee_id|
++-----+------+-----+-----------+
+|James|150000|James|          2|
+| John|100000| null|       null|
+|Emily| 65000|Emily|          3|
+| Nina|200000| null|       null|
++-----+------+-----+-----------+
+
+right_join = tableA.join(tableB, tableA['name'] == tableB['name'], how='right')
+right_join.show()
+
++-----+------+-------------+-----------+
+| name|salary|         name|employee_id|
++-----+------+-------------+-----------+
+|James|150000|        James|          2|
+| null|  null|Princess Leia|          5|
+|Emily| 65000|        Emily|          3|
+| null|  null|  Darth Vader|          5|
++-----+------+-------------+-----------+
+
+full_outer_join = tableA.join(tableB, tableA['name'] == tableB['name'], how='full')
+full_outer_join.show()
+
++-----+------+-------------+-----------+
+| name|salary|         name|employee_id|
++-----+------+-------------+-----------+
+|James|150000|        James|          2|
+| John|100000|         null|       null|
+| null|  null|Princess Leia|          5|
+|Emily| 65000|        Emily|          3|
+| Nina|200000|         null|       null|
+| null|  null|  Darth Vader|          5|
++-----+------+-------------+-----------+
+``` 
