@@ -173,3 +173,273 @@ describe_year('2014')
   * Can be stored in a variables
   * Can be passed to function
   * Can be returned from functions
+
+```py
+
+from pyspark.sql import SparkSession
+spark = SparkSession.builder\
+                    .appName('Analyzing soccer players')\
+                    .getOrCreate()
+
+players = spark.read\
+                .format('csv')\
+                .option('header', 'true')\
+                .load('./player.csv')
+    
+players.printSchema()
+
+player_attributes = spark.read\
+                            .format('csv')\
+                            .option('header', 'true')\
+                            .load('./player_attributes.csv')
+
+player_attributes.printSchema()
+player_attributes.count(), players.count() # creates a tuple (183978, 11060)
+
+player_attributes.select('player_api_id')\
+                    .distinct()\
+                    .count() # 11060
+
+players = players.drop('id', 'player_fifa_api_id')
+# drop id and player_fifa_api_id from the data frame
+players.columns
+# ['player_api_id', 'player_name', 'birthday', 'height', 'weight']
+
+player_attributes = player_attributes.drop(
+    'id',
+    'player_fifa_api_id',
+    'preferred_foot',
+    'attacking_work_rate',
+    'defensive_work_rate',
+    'crossing',
+    'jumping',
+    'sprint_speed',
+    'balance',
+    'aggression',
+    'short_passing',
+    'potential'
+
+)
+
+player_attributes.columns
+
+player_attributes = player_attributes.dropna()
+players = players.dropna()
+# clean up dataset by those rows which contain missing information
+player_attributes.count(), players.count()
+# (181265, 11060)
+
+from pyspark.sql.functions import udf
+
+# specify a functionw hich acts on columns in a DataFrame
+# lambda function extract the year
+year_extract_udf = udf(lambda date: date.split('-')[0])
+
+player_attributes = player_attributes.withColumn(
+    'year',
+    year_extract_udf(player_attributes['date'])
+)
+
+player_attributes = player_attributes.drop('date')
+# since we don't need a date column anymore we go ahead and drop it from the dataframe
+player_attributes.columns
+
+# find the best striker based on specific attributes
+
+pa_2016 = player_attributes.filter(player_attributes['year'] == 2016)
+pa_2016.count()
+# 14103
+
+pa_2016.select(pa_2016['player_api_id'])\
+        .distinct()\
+        .count()
+# the number of unique players is 5586 for 2016
+
+pa_striker_2016 = pa_2016.groupBy('player_api_id')\
+                            .agg({
+                            'finishing': 'avg',
+                            'shot_power': 'avg',
+                            'acceleration': 'avg'
+})
+
+pa_striker_2016.show(5)
+pa_striker_2016.columns
+# ['player_api_id', 'avg(finishing)', 'avg(acceleration)', 'avg(shot_power)']
+
+pa_striker_2016 = pa_striker_2016.withColumnRenamed('avg(finishing)', 'finishing')\
+                                    .withColumnRenamed('avg(acceleration)', 'acceleration')\
+                                    .withColumnRenamed('avg(shot_power)', 'shot_power')
+
+pa_striker_2016.columns
+# ['player_api_id', 'finishing', 'acceleration', 'shot_power']
+
+weight_finishing = 1
+weight_shot_power = 2
+weight_acceleration = 1
+
+total_weight = weight_finishing + weight_shot_power + weight_acceleration
+print(total_weight)
+
+strikers = pa_striker_2016.withColumn('striker_grade',
+                                     (pa_striker_2016['finishing'] * weight_finishing + \
+                                      pa_striker_2016['shot_power'] * weight_shot_power + \
+                                      pa_striker_2016['acceleration'] * weight_acceleration / total_weight)
+                                     )
+
+strikers = strikers.drop('finishing', 'acceleration', 'shot_power')
+# drop columns which are not needed anymore
+# it makes the distributed processing faster because it has to operate on less data
+
+strikers = strikers.filter(strikers['striker_grade'] > 70)\
+                    .sort(strikers['striker_grade'].desc())
+
+strikers.show(10)
+
+striker_details = players.join(strikers, players['player_api_id'] == strikers['player_api_id'])
+# this operation performs an inner join
+# another way to specify a join operation
+# players.join(strikers, ['player_api_id'])
+
+striker_details.columns
+# ['player_api_id', 'player_name', 'birthday', 'height','weight','player_api_id', 'striker_grade']
+
+striker_details.show(5)
+strikers.count(), players.count()
+# (5346, 11060)
+
+# perform join operations by broadcasting dataframes to share the data across tasks
+from pyspark.sql.functions import broadcast
+
+# since the striker dataframe is smaller than players dataframe the strikers dataframe should be broadcast
+striker_details = players.select('player_api_id', 'player_name')\
+                        .join(broadcast(strikers), ['player_api_id'], 'inner')
+
+# in order to perform joins we need to transfer the contents of the dataframe to another dataframe
+# therefore we broadcast the smaller dataframe to all nodes
+# also we ensure that there is only 1 copy per node by using the broadcast
+
+striker_details = striker_details.sort(striker_details['striker_grade'].desc())
+striker_details.show()
+
+players.count(), player_attributes.count()
+# (11060, 181265)
+
+# get all the information that we need into a single dataframe
+# to make join more efficient we need to select only the columns we are interested in
+# players table is smaller so we can broadcast it to all nodes that is just 1 copy per worker node
+# this copy will be stored in the node's cache
+players_heading_acc = player_attributes.select('player_api_id', 'heading_accuracy')\
+                                        .join(broadcast(players),
+                                             player_attributes['player_api_id'] == players['player_api_id'])
+
+
+players_heading_acc.columns
+# ['player_api_id', 'heading_accuracy', 'player_api_id', 'player_name', 'birthday', 'height', 'weight']
+
+# we need now to share count variables across all nodes
+# this is where accumulators come in
+
+short_count = spark.sparkContext.accumulator(0)
+medium_low_count = spark.sparkContext.accumulator(0)
+medium_high_count = spark.sparkContext.accumulator(0)
+tail_count = spark.sparkContext.accumulator(0)
+
+def count_players_by_height(row):
+    height = float(row.height)
+
+    if (height <= 175):
+        short_count.add(1)
+    elif (height <= 183 and height > 175):
+        medium_low_count.add(1)
+    elif (height <= 195 and height > 183):
+        medium_high_count.add(1)
+    elif (height > 195):
+        tail_count.add(1)
+
+
+
+# to apply the function to each player record we use the foreach method
+# the lambda function will be applied to all rows and is distributed across multiple nodes
+players_heading_acc.foreach(lambda x: count_players_by_height(x))
+
+all_players = [
+    short_count.value,
+    medium_low_count.value,
+    medium_high_count.value,
+    tail_count.value
+]
+
+all_players
+# [18977, 97399, 61518, 3371]
+
+# another set of accumulators
+# heading accuracy above a treshold
+short_ha_count = spark.sparkContext.accumulator(0)
+medium_low_ha_count = spark.sparkContext.accumulator(0)
+medium_high_ha_count = spark.sparkContext.accumulator(0)
+tail_ha_count = spark.sparkContext.accumulator(0)
+
+def count_players_by_height_and_heading_accuracy(row, threshold_score):
+
+    height = float(row.height)
+    ha = float(row.heading_accuracy)
+
+    if (ha <= threshold_score):
+        return
+    if (height <= 175):
+        short_ha_count.add(1)
+    elif (height <= 183 and height > 175):
+        medium_low_ha_count.add(1)
+    elif (height <= 195 and height > 183):
+        medium_high_ha_count.add(1)
+    elif (height > 195):
+        tail_ha_count.add(1)
+
+
+players_heading_acc.foreach(lambda x: count_players_by_height_and_heading_accuracy(x, 60))
+
+all_players_above_threshold = [short_ha_count.value,
+                              medium_low_ha_count.value,
+                              medium_high_ha_count.value,
+                              tail_ha_count.value
+                             ]
+# the player records are bucketed into short_ha_count, medium_low etc...
+all_players_above_threshold
+# [7306, 82896, 40270, 3146]
+
+# percentage of players with a high heading accuracy bucketed by height
+
+percentage_values = [short_ha_count.value / short_count.value * 100,
+                              medium_low_ha_count.value / medium_low_count.value * 100,
+                              medium_high_ha_count.value /  medium_high_count.value * 100,
+                              tail_ha_count.value / tail_count.value * 100
+                             ]
+
+percentage_values
+# [38.499235917162885, 85.10970338504502, 65.46051562144413, 93.32542272322752]
+
+```
+
+# Saving data to CSV, JSON
+
+```py
+# now we are going to save the information that is present only in 2 columns
+# coalesce function repartitions the dataframe into a single partition to write out a single file
+# Important: individual records in a dataframe will be split across multiple nodes in a spark cluster
+# use coalesce() function with an argument to repartition the dataframe into a single partition
+# if coalesce() were not used, the number of files written out would be equal to the number of partitions in the dataframe
+# you can change the argument to as many partitions as you want and each partition will write a single file
+pa_2016.select('player_api_id', 'overall_rating')\
+        .coalesce(1)\
+        .write\
+        .option('header', 'true')\
+        .csv('players_overall.csv')
+
+# the output will be only 1 file thanks to the coalesce function
+
+pa_2016.select('player_api_id', 'overall_rating')\
+        .write\
+        .json('players_overall.json')
+
+# the output are 6 json files, since we had 6 partitions, means 1 file for each partition
+``` 
