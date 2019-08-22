@@ -446,7 +446,7 @@ pa_2016.select('player_api_id', 'overall_rating')\
 
 ## Joins
 
-```py
+```md
 from pyspark.sql import SparkSession
 spark = SparkSession.builder\
                     .appName('Analyzing soccer players')\
