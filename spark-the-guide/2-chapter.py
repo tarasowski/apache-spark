@@ -34,7 +34,7 @@ myRange.show()
 # With narrow transfromations, Spark will automatically perform an operation called pipelining, meaning that if we specify multple filters on DataFrames, 
 # they'll be performed in-memory. The same cannot be said for shuffles. When we perform a shuffle, Spark writes the results to disk
 
-divisBy2 = myRange.where('number % 2 = 0')
+divisBy2 = myRange.where('number % 2 = 0') # filter transfomartion
 
 
 # Actions
@@ -44,9 +44,89 @@ divisBy2 = myRange.where('number % 2 = 0')
 #   - Actions to collect data to native objects in the respective language
 #   - Actions to write to output data sources
 
-num = divisBy2.count() # return int see part 3
+num = divisBy2.count() # count() is an action to collect data to native objects in the respective language 
 
 # Spark job that runs:
 # 1. Our filter transformation (a narrow transformation),
 # 2. then an aggregation (a wide transformation) that performs the counts on a per partition basis and 
 # 3. then a collect, which brings our results to a native object in the respective language.
+#   collect() is basically hidden from us away in DF's, on RDD we need to use collect()
+
+
+# Schema inference: Spark peeked at only a couple of rows of data to try to guess what types each column should be
+flightData2015 = spark\
+        .read\
+        .option('inferSchema', 'true')\
+        .option('header', 'true')\
+        .csv('./Spark-The-Definitive-Guide/data/flight-data/csv/2015-summary.csv')
+
+tk3 = flightData2015.take(3) # take() is an action to collect data to native objects in the respective language
+print(tk3)
+
+# Call explain() on any DataFrame object to see the DataFrame's lineage (or how Spark will execute this query)
+# You can read explain plans from top to bottom, the top being the end result, and the bottom being the source(s) of data
+# Take a look at the first keywords:
+#   - sort
+#   - exchange
+#   - filescan
+# That's because the sort of our data is actually a wide transformation because rows will need to be compared with one another.
+flightData2015.sort('count').explain()
+
+# By default, when we perform a shuffle, Spark outputs 200 shuffle partitions. Let's set this value to 5 to reduce the number of the output partitons from the shuffle:
+
+spark.conf.set('spark.sql.shuffle.partitions', '5')
+tk2 = flightData2015.sort('count').take(2)
+print(tk2)
+
+# DataFrames and SQL
+# Spark can run the same transformations, regardless of the language, in the exact same way. You can express your logic in SQL or DataFrames (R, Python, Scala, Java)
+# With Spark SQL you can register any DF as a table or view and query it using pure SQL. There is no performance difference between SQL or DataFrame code
+
+flightData2015.createOrReplaceTempView('flight_data_2015')
+
+# No, we'll use the spark.sql function that returns a new DataFrame
+# spark is our SparkSession variable
+
+sqlWay = spark.sql("""
+        select DEST_COUNTRY_NAME, count(1)
+        from flight_data_2015
+        group by dest_country_name
+        """)
+
+dataFrameWay = flightData2015\
+        .groupBy('DEST_COUNTRY_NAME')\
+        .count()
+
+# These plans compile to the exact same underlying plan!
+
+sqlWay.explain()
+dataFrameWay.explain()
+
+from pyspark.sql.functions import max, desc
+
+mxcSQL = spark.sql('select max(count) from flight_data_2015').take(1)
+mxcDF = flightData2015.select(max('count')).take(1)
+
+# This is how you can access the data from a list of row() objects
+# take() is an action to collect data to native objects in python
+print(mxcSQL[0][0], mxcDF[0][0])
+
+
+maxSql = spark.sql("""
+        select DEST_COUNTRY_NAME, sum(count) as destination_total
+        from flight_data_2015
+        group by DEST_COUNTRY_NAME
+        order by sum(count) desc
+        limit 5
+        """)
+
+maxSql.show()
+
+maxDF = flightData2015\
+        .groupBy('dest_country_name')\
+        .sum('count')\
+        .withColumnRenamed('sum(count)', 'destination_total')\
+        .sort(desc('destination_total'))\
+        .limit(5)\
+
+maxDF.explain()
