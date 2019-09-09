@@ -163,6 +163,7 @@ df.selectExpr(
 
 # What is a litreal in compuer programming
 # A litrals is a notation for representing a fixed value in source code
+#   A value is something that can be manipulated by a computer program
 # In constrast to literals, variables or constants are symbols that can take on one of a class of fixed values, the constant being constrained not to change. 
 # Literals are often used to initialize variables, for example 1 is an integer literal and the three letters string 'cat' is a string litral
 # int a = 1
@@ -171,3 +172,101 @@ df.selectExpr(
 
 from pyspark.sql.functions import lit
 df.select(expr('*'), lit(1).alias('One')).show(2)
+# select * , 1 as One from dfTable limit 2
+# In SQL, literals are just the specific value
+
+
+# Reserverd Characters and Keywords
+# There are reserved characters like spaces or dashes in column names
+# Handling these means escaping column names
+
+# Escaping means reducing the ambiguity
+h = "Hello World"
+h_ = "Hello \"World\""
+# any quote that is preceded by a slash is escaped, and understood to be part of the value of the string
+h__ = 'Hello "World"'
+
+# SQL has certain keywords it watches for that we cannot use in our queries without causing some confusion
+# Suppose we had a table of values where a column was named "Select", and we wanted to select that
+# select select from myTable
+# Now we introduced some ambiguity into our query. Within our query, we can reduce that ambiguity by using back-ticks:
+# select `select` from myTable
+
+
+# Changing a Column's Type (cast)
+# Cat converts from one type to another
+df.withColumn('count2', col('count').cast('long'))
+# select * cast(count as long) as count2 from dfTable
+
+
+# Filtering Rows
+# To filter rows, we create an expression that evaluates to true or false
+# You then filter out the wors with an expression that is equal to false
+# The most common wy is to create an expression as a String or build an expression by using a set of column manipulations
+df.where('count < 2').show(2)
+# select * from dfTable where count < 2 limit 2
+df.where(col('count') < 2).show(2)
+
+
+# Concatenating and Appending Rows (Union)
+# DataFrames are immutable. This means users canot append to DF because that would be changing it.
+# To append to a DF, you must union the original DataFrame along with the new DF.
+# Unit = concatenation of two DataFrames
+# To union two DFs, you must be sure that they have the same schema and number of columns;
+
+schema = df.schema
+newRows = [
+        Row('New Country', 'Other Country', 5),
+        Row('New Country2', 'Other Country 3', 1)
+        ]
+parallelizeRows = spark.sparkContext.parallelize(newRows)
+newDF = spark.createDataFrame(parallelizeRows, schema)
+
+
+df.union(newDF)\
+        .where('count = 1')\
+        .where(col('origin_country_name') != 'United States')\
+        .show()
+
+
+# Sorting Rows
+# There are two equivalent operations to do this sort and orderBy that work the exact same way
+# They both accept column expressions and strings as well as multiple columns. 
+
+df.sort('count').show(5)
+df.orderBy('count', 'dest_country_name').show(5)
+df.orderBy(col('count'), col('dest_country_name')).show(5)
+
+df.orderBy(expr('count desc')).show(2)
+df.orderBy(col('count').desc(), col('dest_country_name').asc()).show(2)
+
+
+# Repartition and Coaleasce
+# Repartiton will incur a full shuffle of the data, regardless of whether one is necessary. 
+# This means you should typicall only repartition when the future number of partitions is greater than your current number of partitions
+nP = df.rdd.getNumPartitions()
+print(nP) # 1
+df.repartition(5)
+
+# If you know that you're going to be filtering by a certain column often, it can be worth repartitioning based on that column
+# specify the number of partitions e.g. 5
+df.repartition(5, col('dest_country_name'))
+
+
+# Coalese
+# coalesce means come together to form one mass or whole
+# Coalesce on the other hand, will not incur a full shuffle and will try to combine partitons
+# This operation will shuffle your data into five partitions based on the destination country name, and then coalesce them (without a full shuffle)
+df.repartition(5, col('dest_country_name')).coalesce(2)
+
+
+# Collecting Rows to the Driver
+# Spark maintains the state of the cluster in the driver.
+# There are times when you'll want to collect some of your data to the driver in order to manipulate it on your local machine
+# However, we used several different methods for doing so that are effectively all the same. collect gets all data from the entire DataFrame, take selects the first N rows, and show prints out a number of rows
+
+collectDF = df.limit(10)
+collectDF.take(5)
+collectDF.show()
+collectDF.show(5, False)
+collectDF.collect()
