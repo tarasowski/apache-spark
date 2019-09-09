@@ -303,3 +303,128 @@ df.selectExpr(
         'nvl2("not_null", "return_value", "else_value")'
         ).show()
 
+
+df.selectExpr(
+        'null as newColumn',
+        '*'
+        ).show(5)
+
+# drop
+# The simplest function is drop, which removes rows that contains nulls. 
+# The default is to drop any row in which any value is null
+
+df.na.drop().show()
+# Specifying "any" as an argument drops a row if any of the values are null. Using "all" drops the row only if all values are null or NaN for that row
+#df.na.drop('any')
+
+df.na.drop("all", subset=["StockCode", "InvoiceNo"])
+
+
+# Working with Complex Types
+# There are three kinds of complex types: struct, arrays, and maps
+
+# Structs
+# You can think of structs as DataFrames within DataFrames. 
+# We can create a struct by wrapping a set of columns in parenthesis in a query:
+
+from pyspark.sql.functions import struct, explode
+complexDF = df.select(struct("Description", "InvoiceNo").alias("complex"))
+complexDF.createOrReplaceTempView("complexDF")
+
+# We no have a DataFrame with a column complex. We can query it just as we might another DataFrame
+# The only difference is that we use a dot syntax to do so, or the column methods getField
+complexDF.select("complex.Description").show(5)
+complexDF.selectExpr("complex.Description").show(5)
+spark.sql("select complex.Description from complexDF").show(5)
+spark.sql("select complex.* from complexDF").show(5)
+
+
+# Arrays
+# Use case: take every single word in the Description column and convert that into a row in our DataFrame
+
+from pyspark.sql.functions import split, array_contains
+df.select(split(col("Description"), " ")).show(2)
+df.selectExpr("split(Description, ' ')").show(2)
+
+# We can also query the values of the array using Python-like syntax:
+df.selectExpr("split(Description, ' ') as array_col")\
+        .selectExpr("array_col[0]").show(2)
+
+# We can determine the array's length by querying for its size:
+df.selectExpr("size(split(Description, ' '))").show(5)
+
+# We can also see whether this array contains a value:
+df.select(array_contains(split(col("Description"), " "), "WHITE")).show(5)
+df.selectExpr("array_contains(split(Description, ' '), 'WHITE')").show(5)
+
+
+# To convert complex ype into a set of rows (one per value in our array), we need to use explode function
+# The explode function takes a column that consists of array and crates one row per value in the array
+# "Hello World", "other col" -- split --> ["Hello", "World"], "other col" -- explode --> "Hello", "other col"
+#                                                                                        "World", "other col"
+
+df.selectExpr(
+        "*",
+        "split(Description, ' ') as splitted",
+        ).selectExpr(
+                "*",
+                "explode(splitted) as exploded")\
+                        .select("Description", "InvoiceNo", "exploded").show(20, False)
+
+
+# Maps
+# Maps are created by using the map function and key-value pairs of columns
+
+df\
+    .filter(col("Description").isNotNull())\
+    .selectExpr("map(Description, InvoiceNo) as complex_map")\
+    .selectExpr("complex_map").show(2)
+
+from pyspark.sql.functions import create_map
+
+mapDF = df.select(create_map(col("Description"), col("InvoiceNo")).alias("complex_map2"))
+# You can query a map by using the proper key. A missing key retunrs null
+mapDF.selectExpr(
+        "complex_map2['WHITE METAL LANTERN']").show(5)
+
+
+
+# Working with JSON
+# You can operate directly on strings of JSON in Spark and parse from JSON or extract JSON objects
+# Use json_tuple if the object has only one level of nesting
+# Use get_json_object to inline query a JSON object, be it a dictionary or array
+
+jsonDF = spark.range(1).selectExpr("""
+        '{"myJSONKey": {"myJSONValue": [1,2,3]}}' as jsonString""")
+
+jsonDF.printSchema()
+jsonDF.show(10)
+
+from pyspark.sql.functions import get_json_object, json_tuple
+
+jsonDF.selectExpr(
+        "json_tuple('{\"myJSONKey\": \"myJSONValue\"}', 'myJSONKey') as column",
+        "get_json_object('{\"myJSONKey\": {\"myJSONValue\": [1,2,3]}}', '$.myJSONKey.myJSONValue[1]') as element_value_one",
+        "get_json_object(jsonString, '$.myJSONKey.myJSONValue[2]') as element_value_two"
+        ).show(2)
+
+# turn a StructType into a JSON string using the to_json function
+
+df.selectExpr(
+        "(InvoiceNo, Description) as myStruct")\
+                .selectExpr("to_json(myStruct)").show(5)
+
+df.selectExpr(
+        "(InvoiceNo, Description) as myStruct")\
+                .select("myStruct.InvoiceNo")\
+                .show()
+
+from pyspark.sql.functions import from_json, to_json
+from pyspark.sql.types import *
+parseSchema = StructType((
+        StructField("InvoiceNo", StringType(), True),
+        StructField("Description", StringType(), True)))
+
+df.selectExpr("(InvoiceNo, Description) as myStruct")\
+        .select(to_json(col("myStruct")).alias("newJSON"))\
+        .select(from_json(col("newJSON"), parseSchema), col("newJSON")).show(2)
