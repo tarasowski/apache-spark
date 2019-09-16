@@ -2,9 +2,9 @@
 # Spark's ability to talk to different data means that you gain the ability to tap into a variety of data sources across your company.
 
 # Join Expression
-# A join brings togehter two sets of data, the left and the right, by comparing the value of one or more keys of the left and right 
+# A join brings together two sets of data, the left and the right, by comparing the value of one or more keys of the left and right 
 # and evaluating the result of a join expression that determines whether Spark should bring togehter the left set of data with the right set of data
-# The most common join expression, an equi-join, compares whether the specified keys in your lef and right datasets are equal
+# The most common join expression, an equi-join, compares whether the specified keys in your left and right datasets are equal
 # If they are equal, Spark will combine the left and right datasets
 
 # Data set

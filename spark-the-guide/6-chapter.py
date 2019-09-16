@@ -194,10 +194,11 @@ df.select(*selectedColumns).where(expr('is_white OR is_red'))\
 
 # Working w/ Dates and Timestamps
 # There are dates which focus exclusively on calendar dates, and timestamps, which include both data and time
-# Spark wtih make a best effort to correctly identify column types, including dates and timestamps when we enable inferSchema
+#   - dates focus on calendar dates
+#   - timestamps focus on data and time
+# Spark will make a best effort to correctly identify column types, including dates and timestamps when we enable inferSchema
 # Spark can be a bit particular about what format you have at any given point in time
 # It's important to be explicit when parsing or converting to ensure that there are not issues in doing so
-# It's important to be explicit when parsing or converting to ensure that there are not issue sin doing so
 
 from pyspark.sql.functions import current_date, current_timestamp, date_add, date_sub, datediff, months_between, to_date
 
@@ -383,7 +384,7 @@ df\
 from pyspark.sql.functions import create_map
 
 mapDF = df.select(create_map(col("Description"), col("InvoiceNo")).alias("complex_map2"))
-# You can query a map by using the proper key. A missing key retunrs null
+# You can query a map by using the proper key. A missing key returns null
 mapDF.selectExpr(
         "complex_map2['WHITE METAL LANTERN']").show(5)
 

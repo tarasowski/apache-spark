@@ -13,6 +13,7 @@ spark = SparkSession\
 myRange = spark.range(1000).toDF('number')
 # This is a data frame with one column containing 1,000 rows with values from 0 to 999.
 myRange.show()
+print("After creating myRange, the number of partitions: ", myRange.rdd.getNumPartitions())
 
 # DataFrames
 # A DataFrame is the most common Structured API and simply represents a table of data with rows and columns.
@@ -77,6 +78,7 @@ flightData2015.sort('count').explain()
 spark.conf.set('spark.sql.shuffle.partitions', '5')
 tk2 = flightData2015.sort('count').take(2)
 print(tk2)
+print("The number of partitions after spark.conf.set", flightData2015.rdd.getNumPartitions())
 
 # DataFrames and SQL
 # Spark can run the same transformations, regardless of the language, in the exact same way. You can express your logic in SQL or DataFrames (R, Python, Scala, Java)
@@ -133,7 +135,7 @@ maxDF.explain()
 
 # Now there are seven steps that take us all the way back to the source data.
 # This execution plan is a directed acyclic graph (DAG) of transformations, each resulting in a new immutable DataFrame, on which we call an action to generate a result
-# CSV Fiel - read -> DataFrame - groupBy -> Grouped DataFrame - sum -> DataFrame - rename column -> DataFrame - sort -> DataFrame - limit -> DataFrame - collect -> Array(..)
+# CSV File - read -> DataFrame - groupBy -> Grouped DataFrame - sum -> DataFrame - rename column -> DataFrame - sort -> DataFrame - limit -> DataFrame - collect -> Array(..)
 # 1. Step: read the data
 # 2. Step: grouping, we end up with a RelationalGroupedDataset, which is a fance name for DataFrame that has a grouping specified but needs the user to specify an aggregation before it can be queried further.
 # 3. Step: specification of the aggregation, we use the sum aggregation method

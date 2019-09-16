@@ -12,7 +12,7 @@ df.printSchema()
 
 # A schema defines the column names and types of DataFrame.
 # We can let a data source define the schema (schema-on-read) or we can explicitly define it ourselves
-# Warning: When using Spark for production ETL, it is often a good idea to define your shcema manually.
+# Warning: When using Spark for production ETL, it is often a good idea to define your schema manually.
 
 static_schema = df.schema
 print(static_schema)
@@ -40,7 +40,7 @@ df.printSchema()
 # Columns and Expressions
 # You can select, manipulate, and remove columns from DataFrames and these operations are represented as expressions
 # To Spark, columns are logical constructs that simply represent a value computed on a per-record basis by means of an expression.
-# This means to have a real value for a column, we need to have a reow; and to have a row, we need to have a DataFrame
+# This means to have a real value for a column, we need to have a row; and to have a row, we need to have a DataFrame
 
 # SQL Basics
 # SQL expression is a combination of one or more values, operators and SQL functions that results in to a value.
@@ -163,8 +163,8 @@ df.selectExpr(
 
 # What is a litreal in compuer programming
 # A litrals is a notation for representing a fixed value in source code
-#   A value is something that can be manipulated by a computer program
-# In constrast to literals, variables or constants are symbols that can take on one of a class of fixed values, the constant being constrained not to change. 
+#   - A value is something that can be manipulated by a computer program
+# In contrast to literals, variables or constants are symbols that can take on one of a class of fixed values, the constant being constrained not to change. 
 # Literals are often used to initialize variables, for example 1 is an integer literal and the three letters string 'cat' is a string litral
 # int a = 1
 # string s = 'cat'
@@ -194,15 +194,15 @@ h__ = 'Hello "World"'
 
 
 # Changing a Column's Type (cast)
-# Cat converts from one type to another
+# Cast converts from one type to another
 df.withColumn('count2', col('count').cast('long'))
 # select * cast(count as long) as count2 from dfTable
 
 
 # Filtering Rows
 # To filter rows, we create an expression that evaluates to true or false
-# You then filter out the wors with an expression that is equal to false
-# The most common wy is to create an expression as a String or build an expression by using a set of column manipulations
+# You then filter out the words with an expression that is equal to false
+# The most common way is to create an expression as a String or build an expression by using a set of column manipulations
 df.where('count < 2').show(2)
 # select * from dfTable where count < 2 limit 2
 df.where(col('count') < 2).show(2)
@@ -211,7 +211,7 @@ df.where(col('count') < 2).show(2)
 # Concatenating and Appending Rows (Union)
 # DataFrames are immutable. This means users canot append to DF because that would be changing it.
 # To append to a DF, you must union the original DataFrame along with the new DF.
-# Unit = concatenation of two DataFrames
+# Union = concatenation of two DataFrames
 # To union two DFs, you must be sure that they have the same schema and number of columns;
 
 schema = df.schema

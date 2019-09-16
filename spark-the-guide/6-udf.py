@@ -50,6 +50,6 @@ udfExampleDF.selectExpr("power3py(num)").show(2)
 # the same here, the return type of power3py doesn't match the return type from the udf
 spark.sql("select power3(num), power3py(num) from udfTable").show(2)
 
-# Whe you want to optionally retur a value from a UDF, you should return None in Python and an Option type in Scala
+# Whe you want to optionally return a value from a UDF, you should return None in Python and an Option type in Scala
 
 
