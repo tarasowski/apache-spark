@@ -3,7 +3,7 @@
 
 from pyspark.sql import SparkSession
 from pyspark.sql.types import DateType
-from pyspark.sql import functions as f
+from pyspark.sql.functions import col
 from pyspark.sql import types as t
 import sys
 from pyspark.sql.window import Window
@@ -90,5 +90,39 @@ show_partition_id(bartDF)
 
 l = [Row(10, "blue"), Row(13, "red"), Row(15, "blue"), Row(99, "red"), Row(67, "blue")]
 people = spark.createDataFrame(l)
+people = people.select(col("_1").alias("age"), col("_2").alias("color"))
+
 people.show()
 
+# repartition by column
+# colorDF contains different partitions for each color
+# Partitioning by a column is similar to indexing a column in a relational database
+colorDF = people.repartition("color")
+print("The number of partition after repartition('color'): ", colorDF.rdd.getNumPartitions()) # 200
+print(show_partition_id(colorDF))
+# Partition 00091
+# 13, red
+# 99, red
+# Partition 00168
+# 10, blue
+# 15, blue
+# 67, blue
+
+
+# Spark doesnt adjust the number of partitions when a large DF is filtered
+# Data late 2B rows of data split into 13,000 partitions
+# Data puddle is 2,000 rows of data and still split into 13,000 partitions -> many of the partitions will be empty
+# We should repartition in order to optimize the read / write performance e.g. data_puddle.repartition(4)
+# Why 4 partitions for the data puddle?
+#   - The data is million times smaller, so we reduce the number of partitions by a millions 13,000 / 1,000,000 = 1 partition (rounded up). We use 4 so data puddle can leverage the parallelism of Spark
+#   - You can determine the number of partitions by multiplying the number of CPUs in the cluster by 2, 3, or 4
+#   - On my local machine 7 cpus
+
+# Why to choose repartition instead of coalesce?
+# For small files repartition method returns equal sized text files, which are most more efficient for downstream consumers
+# Performance improvement
+#   - it took 241 seconds to count the rows in the puddle when data wasn't repartitioned (on a 5 node cluster)
+#   - it only took 2 seconds to count the data puddle when the data was partitioned
+
+
+# The number of partitions set to 3 or 4 times the number of CPU cores in your cluster!!!
