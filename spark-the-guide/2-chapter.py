@@ -137,7 +137,7 @@ maxDF.explain()
 # This execution plan is a directed acyclic graph (DAG) of transformations, each resulting in a new immutable DataFrame, on which we call an action to generate a result
 # CSV File - read -> DataFrame - groupBy -> Grouped DataFrame - sum -> DataFrame - rename column -> DataFrame - sort -> DataFrame - limit -> DataFrame - collect -> Array(..)
 # 1. Step: read the data
-# 2. Step: grouping, we end up with a RelationalGroupedDataset, which is a fance name for DataFrame that has a grouping specified but needs the user to specify an aggregation before it can be queried further.
+# 2. Step: grouping, we end up with a RelationalGroupedDataset, which is a fancy name for DataFrame that has a grouping specified but needs the user to specify an aggregation before it can be queried further.
 # 3. Step: specification of the aggregation, we use the sum aggregation method
 # 4. Step: is renaming
 # 5. Step: sorts the data that if we were to take results off the top of the DataFrame, they would have the largest values in the destination_total colmn
