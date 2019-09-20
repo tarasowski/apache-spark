@@ -178,10 +178,61 @@ spark = SparkSession\
 
 
 # Reading from SQL DBs
-driver = "org.sqlite.JDBC"
-path = "./Spark-The-Definitive-Guide/data/flight-data/jdbc/my-sqlite.db"
-url = "jdbc:sqlite:" + path
-tablename = "flight_info"
+#driver = "org.sqlite.JDBC"
+#path = "./Spark-The-Definitive-Guide/data/flight-data/jdbc/my-sqlite.db"
+#url = "jdbc:sqlite:" + path
+#tablename = "flight_info"
 
 # Testing the connection
-df = spark.read.format("jdbc").option("url", url).option("dbtable", tablename).option("driver", driver).load()
+#df = spark.read.format("jdbc").option("url", url).option("dbtable", tablename).option("driver", driver).load()
+
+# Reading Text Files
+#spark.read.textFile("./Spark-The-Definitive-Guide/data/csv/2010-summary.csv")\
+#    .selectExpr("split(value, ',') as rows").show()
+
+# Advanced I/O Concepts
+# Splittable File Types and Compression
+# Certain file formats are fundamentally "splittable". This can improve speed because it makes it possible for for Spark to avoid reading an entire file
+# and access only the parts of the file necessary to satisfy your query.
+# Not all compression schemes are splittable. We recommend Parquet with gzip compression
+
+# Reading Data in Parallel
+# Multiple executors cannot read from the same file at the same time, but they can read different files at the same time
+# This means when you read from a folder with multiple files in it, each one of those files will become a partition in your DataFrame and be read in by available executors in parallel
+
+# Writing Data in Parallel
+# The number of files or data written is dependent on the numer of partition the DataFrame has at the time you write out the data
+# By default, one file is written per partition of the data!
+# csvFile.reparition(5).write.fomrat("csv").save("/tmp/multiple.csv")
+# we'll end up with file files inside of that folder:
+# tmp/multiple.csv/part-00000-xxxxx.csv
+# tmp/multiple.csv/part-00001-xxxxx.csv
+# tmp/multiple.csv/part-00002-xxxxx.csv
+
+
+# Partitioning
+# This is the lowest-hanging optimization that you can use that you can use when you have a table that readers frequently filter by before manipulating
+# Date is particularly common for a partition because downstream, often we want to look at only the previous week's data. This can speedups for readers
+# Partitioning is a tool that allows you to control what data is stored (and wheere) as you write it
+# When you write a file to a partitioned directory (or table), you basically encode a column as a folder
+# It allows you to skip lots of data when you go to read it in later, allowing you to read in only the data relevant to your problem instead of having to scan the complete dataset
+# csfFile.limit(10).write.mode("overwrite").partitionBy("DEST_COUNTRY_NAME")\
+#        .save("/tmp/partitioned-files.parquet")
+# You'll get list of folders: 
+#DEST_COUNTRY_NAME=Costa Rica/ 
+#DEST_COUNTRY_NAME=Egypt/ 
+#DEST_COUNTRY_NAME=Senegal/
+
+
+# Bucketing
+# Bucketing is another file organization approach whith which you can control the data that is specifically written to each file
+# This can help avoid shuffles later when you go to read the data because data with the same bucket ID will all be grouped together into one physical partition
+# This means that the data is prepartitioned according to how you expect to use that data later on, meaning you can avoid expensive shuffles when joining or aggregating
+
+
+# Managing File Size
+# Spark does not do well with small files. You might hear this referred to as the "small file problem"
+# The opposite is also true: you don't want files that are too large either, because it becomes inefficient to have to read entire blocks of data when you need only a few rows
+# From Spark 2.2 you can use the "maxRecordsPerFile" option and specify a number of your choosing. This allows you to better control file sizes by controlling the number of records that are written each file
+# df.write.option("maxRecordsPerFile", 5000), Spark will ensure that files will contain at most 5,000 records
+
